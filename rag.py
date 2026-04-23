@@ -1,46 +1,46 @@
 import os
+import json
+
 from langchain_community.document_loaders import PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_groq import ChatGroq
-from langchain_core.documents import Document
 
-# =====================
-# LOAD DATA
-# =====================
+# =========================
+# LOAD PDF
+# =========================
 
 PDF_PATH = "regulation.pdf"
-JSON_PATH = "faculty_QA_dataset.json"
 
 loader = PyPDFLoader(PDF_PATH)
-pdf_docs = loader.load()
+docs = loader.load()
 
 splitter = RecursiveCharacterTextSplitter(
     chunk_size=1000,
     chunk_overlap=200
 )
 
-pdf_chunks = splitter.split_documents(pdf_docs)
+chunks = splitter.split_documents(docs)
 
-# =====================
+# =========================
 # EMBEDDINGS
-# =====================
+# =========================
 
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
 vectorstore = Chroma.from_documents(
-    documents=pdf_chunks,
+    documents=chunks,
     embedding=embeddings
 )
 
 retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
 
-# =====================
-# LLM (GROQ)
-# =====================
+# =========================
+# GROQ LLM
+# =========================
 
 api_key = os.getenv("GROQ_API_KEY")
 
@@ -50,13 +50,11 @@ llm = ChatGroq(
     temperature=0
 )
 
-# =====================
-# SIMPLE JSON QA
-# =====================
+# =========================
+# JSON QA SYSTEM
+# =========================
 
-import json
-
-with open(JSON_PATH, "r", encoding="utf-8") as f:
+with open("faculty_QA_dataset.json", "r", encoding="utf-8") as f:
     qa_data = json.load(f)
 
 def search_json(query):
@@ -65,25 +63,31 @@ def search_json(query):
             return item["answer"]
     return None
 
-# =====================
+# =========================
 # MAIN FUNCTION
-# =====================
+# =========================
 
 def ask_rag(question):
 
-    # 1. check JSON first
+    # 1. Greeting handling
+    greetings = ["hi", "hello", "hey", "سلام", "ازيك"]
+    if any(g in question.lower() for g in greetings):
+        return "👋 Hello! Ask me anything from the PDF or dataset.", []
+
+    # 2. JSON first
     json_answer = search_json(question)
     if json_answer:
         return json_answer, []
 
-    # 2. retrieve from PDF
+    # 3. PDF retrieval
     docs = retriever.get_relevant_documents(question)
 
     context = "\n\n".join([d.page_content for d in docs])
 
     prompt = f"""
 You are an academic assistant.
-Answer ONLY from the context.
+
+Answer ONLY from context.
 
 Context:
 {context}
