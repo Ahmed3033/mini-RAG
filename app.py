@@ -1,75 +1,42 @@
 import streamlit as st
-import random
-
 from rag import ask_rag
 
-# =====================
-# UI
-# =====================
-st.set_page_config(
-    page_title="Academic Chatbot",
-    page_icon="🎓",
-    layout="wide"
-)
+st.set_page_config(page_title="Academic RAG Bot", page_icon="🎓")
 
-st.title("🎓 Academic AI Assistant")
+st.title("🎓 Academic Assistant RAG Bot")
 
-# =====================
-# GREETING
-# =====================
-def is_greeting(text):
-    text = text.lower()
-    return any(x in text for x in [
-        "hi", "hello", "hey",
-        "سلام", "ازيك", "اهلا", "مرحبا"
-    ])
-
-def greet():
-    return random.choice([
-        "Hello 👋 How can I help you?",
-        "Hi 😊 Ask your academic question.",
-        "Hey 🎓 I'm ready to help!"
-    ])
-
-# =====================
-# SESSION
-# =====================
 if "chat" not in st.session_state:
     st.session_state.chat = []
 
-# =====================
-# INPUT
-# =====================
-msg = st.chat_input("Ask your question...")
-
-if msg:
-
-    st.session_state.chat.append(("user", msg))
-
-    if is_greeting(msg):
-        reply = greet()
-    else:
-        reply = ask_rag(msg)
-
-    st.session_state.chat.append(("bot", reply))
+user_input = st.chat_input("Ask your question...")
 
 # =====================
-# CHAT UI
+# GREETING LOGIC
 # =====================
-for role, text in st.session_state.chat:
 
-    if role == "user":
-        with st.chat_message("user"):
-            st.markdown(text)
+greetings = ["hi", "hello", "hey", "سلام", "ازيك", "هلو"]
+
+if user_input:
+
+    # simple greeting response
+    if any(g in user_input.lower() for g in greetings):
+        answer = "👋 Hello! I am your academic assistant. Ask me anything from the PDF or dataset."
+        sources = []
 
     else:
-        with st.chat_message("assistant"):
-            st.markdown(text)
+        answer, sources = ask_rag(user_input)
+
+    st.session_state.chat.append((user_input, answer, sources))
 
 # =====================
-# DEBUG
+# CHAT DISPLAY
 # =====================
-st.sidebar.title("Debug")
 
-if st.session_state.chat:
-    st.sidebar.write(st.session_state.chat[-1][1])
+for q, a, s in st.session_state.chat:
+    st.chat_message("user").write(q)
+    st.chat_message("assistant").write(a)
+
+    if s:
+        with st.expander("📚 Sources"):
+            for doc in s:
+                st.write(doc.page_content[:500])
